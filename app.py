@@ -182,18 +182,6 @@ if menu == "📊 Dashboard":
 
     st.divider()
 
-    # Overall Summary Metrics
-    c_cash = sales_df['cash'].sum() if not sales_df.empty else 0.0
-    c_transfer = sales_df['transfer'].sum() if not sales_df.empty else 0.0
-
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("💵 Total Cash Handled", f"₦{c_cash:,.2f}")
-    m2.metric("💳 Total Bank Transfers", f"₦{c_transfer:,.2f}")
-    m3.metric("📈 Total Gross Sales", f"₦{total_revenue_all:,.2f}")
-    m4.metric("📉 Total Expenses", f"₦{total_expenses_all:,.2f}")
-
-    st.divider()
-
     # Tables
     col_l, col_r = st.columns(2)
     with col_l:
