@@ -16,7 +16,7 @@ st.set_page_config(
 
 # ==============================================================================
 # SPREADSHEET URL
-SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1yD6Q0Z0-V39mE9L4hN4A9Xl9-xL4xM_B2X-YOUR_LINK_HERE"
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1o9IvmiD0rmdImaDHwk4k7zyyq2nZ-XDide8hPimpKQM/edit?gid=0#gid=0"
 # Note: Ensure your actual Google Sheet URL is preserved above!
 # ==============================================================================
 
