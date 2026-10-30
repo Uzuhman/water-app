@@ -15,9 +15,8 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# SPREADSHEET URL
+# SPREADSHEET URL: Ensure your actual Google Sheet URL is between the quotes!
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1o9IvmiD0rmdImaDHwk4k7zyyq2nZ-XDide8hPimpKQM/edit?gid=0#gid=0"
-# Note: Ensure your actual Google Sheet URL is preserved above!
 # ==============================================================================
 
 ADMIN_PIN = "1234"
@@ -27,6 +26,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
+
 
 def find_local_key():
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -38,6 +38,7 @@ def find_local_key():
     if json_files:
         return json_files[0]
     return None
+
 
 @st.cache_resource
 def get_sheets():
@@ -66,7 +67,9 @@ def get_sheets():
         st.error(f"⚠️ Could not open Google Sheet. Check link and sharing permissions.")
         st.stop()
 
+
 sales_sheet, expenses_sheet = get_sheets()
+
 
 # --- HELPER FUNCTIONS FOR GOOGLE SHEETS ---
 def get_sales():
@@ -79,6 +82,7 @@ def get_sales():
     df['total'] = pd.to_numeric(df['total'], errors='coerce').fillna(0.0)
     return df
 
+
 def get_expenses():
     records = expenses_sheet.get_all_records()
     df = pd.DataFrame(records)
@@ -87,11 +91,13 @@ def get_expenses():
     df['amount'] = pd.to_numeric(df['amount'], errors='coerce').fillna(0.0)
     return df
 
+
 def add_sale(sale_date, attendant, cash, transfer):
     df = get_sales()
     next_id = int(df['id'].max() + 1) if not df.empty and pd.notnull(df['id'].max()) else 1
     total = cash + transfer
     sales_sheet.append_row([next_id, str(sale_date), attendant.strip(), cash, transfer, total])
+
 
 def update_sale(sale_id, sale_date, attendant, cash, transfer):
     cell = sales_sheet.find(str(sale_id), in_column=1)
@@ -100,15 +106,18 @@ def update_sale(sale_id, sale_date, attendant, cash, transfer):
         total = cash + transfer
         sales_sheet.update(f"B{row}:F{row}", [[str(sale_date), attendant.strip(), cash, transfer, total]])
 
+
 def delete_sale(sale_id):
     cell = sales_sheet.find(str(sale_id), in_column=1)
     if cell:
         sales_sheet.delete_rows(cell.row)
 
+
 def add_expense(exp_date, category, description, amount):
     df = get_expenses()
     next_id = int(df['id'].max() + 1) if not df.empty and pd.notnull(df['id'].max()) else 1
     expenses_sheet.append_row([next_id, str(exp_date), category, description.strip(), amount])
+
 
 def update_expense(exp_id, exp_date, category, description, amount):
     cell = expenses_sheet.find(str(exp_id), in_column=1)
@@ -116,10 +125,12 @@ def update_expense(exp_id, exp_date, category, description, amount):
         row = cell.row
         expenses_sheet.update(f"B{row}:E{row}", [[str(exp_date), category, description.strip(), amount]])
 
+
 def delete_expense(exp_id):
     cell = expenses_sheet.find(str(exp_id), in_column=1)
     if cell:
         expenses_sheet.delete_rows(cell.row)
+
 
 # --- SESSION STATES ---
 if "show_balance" not in st.session_state:
@@ -130,6 +141,8 @@ if "pending_sale" not in st.session_state:
     st.session_state.pending_sale = None
 if "pending_expense" not in st.session_state:
     st.session_state.pending_expense = None
+if "active_modal" not in st.session_state:
+    st.session_state.active_modal = None  # Can be 'sale', 'expense', or None
 
 # --- SIDEBAR BRANDING & NAVIGATION ---
 if os.path.exists("logo.png"):
@@ -140,11 +153,11 @@ st.sidebar.caption("Water Sales Management")
 
 menu = st.sidebar.radio(
     "Navigation:",
-    ["📊 Dashboard", "💰 Record Sale", "💸 Record Expense", "✏️ Edit / Correct Records", "📑 Comprehensive Report & Print"]
+    ["📊 Dashboard", "✏️ Edit / Correct Records", "📑 Comprehensive Report & Print"]
 )
 
 # ==========================================
-# PAGE 1: CLEAN DASHBOARD
+# PAGE 1: CLEAN DASHBOARD WITH ACTION BUTTONS
 # ==========================================
 if menu == "📊 Dashboard":
     sales_df = get_sales()
@@ -163,7 +176,7 @@ if menu == "📊 Dashboard":
                 st.image("logo.png", width=75)
             with c_title:
                 st.subheader("COR Mission House Water Sales Record")
-                st.caption("Live Operations & Revenue Overview")
+                st.caption("Daily Operations & Entry Portal")
         else:
             st.title("COR Mission House Water Sales Record")
 
@@ -182,135 +195,160 @@ if menu == "📊 Dashboard":
 
     st.divider()
 
+    # --- ACTION BUTTONS DIRECTLY ON DASHBOARD ---
+    st.write("### Quick Actions")
+    btn_col1, btn_col2 = st.columns(2)
+
+    with btn_col1:
+        if st.button("💰 Record Daily Sale", use_container_width=True, type="primary"):
+            st.session_state.active_modal = "sale" if st.session_state.active_modal != "sale" else None
+            st.rerun()
+
+    with btn_col2:
+        if st.button("💸 Record Daily Expense", use_container_width=True):
+            st.session_state.active_modal = "expense" if st.session_state.active_modal != "expense" else None
+            st.rerun()
+
+    # --- CONDITIONAL FORM 1: RECORD SALE ---
+    if st.session_state.active_modal == "sale":
+        st.info("### 💰 Entry Form: Record Daily Sale")
+        if st.session_state.pending_sale is not None:
+            ps = st.session_state.pending_sale
+            st.warning("⚠️ **Please verify and confirm this sale before it is saved to Cloud:**")
+            st.markdown(f"""
+            - **Date:** {ps['date']}
+            - **Attendant:** **{ps['attendant']}**
+            - **Cash Amount:** ₦{ps['cash']:,.2f}
+            - **Transfer Amount:** ₦{ps['transfer']:,.2f}
+            - **TOTAL SALE:** **₦{ps['total']:,.2f}**
+            """)
+            c_conf, c_canc = st.columns(2)
+            if c_conf.button("✅ Confirm & Save to Cloud", use_container_width=True):
+                with st.spinner("Saving to Google Sheets..."):
+                    add_sale(ps['date'], ps['attendant'], ps['cash'], ps['transfer'])
+                st.success(f"✅ Confirmed! Sale of ₦{ps['total']:,.2f} saved successfully.")
+                st.session_state.pending_sale = None
+                st.session_state.active_modal = None
+                st.rerun()
+
+            if c_canc.button("❌ Edit / Cancel", use_container_width=True):
+                st.session_state.pending_sale = None
+                st.rerun()
+        else:
+            with st.form("quick_sales_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    sale_date = st.date_input("Date of Sale", value=date.today())
+                    attendant = st.text_input("Attendant Name")
+                with col2:
+                    cash = st.number_input("Cash Amount (₦)", min_value=0.0, step=100.0, format="%.2f")
+                    transfer = st.number_input("Transfer Amount (₦)", min_value=0.0, step=100.0, format="%.2f")
+
+                total_prev = cash + transfer
+                st.info(f"**Calculated Total: ₦{total_prev:,.2f}**")
+
+                col_s1, col_s2 = st.columns([1, 1])
+                submit_sale = col_s1.form_submit_button("💾 Save to Cloud", use_container_width=True)
+                close_form = col_s2.form_submit_button("✖️ Close Form", use_container_width=True)
+
+                if submit_sale:
+                    if not attendant:
+                        st.error("Please enter the attendant's name.")
+                    elif total_prev <= 0:
+                        st.error("Sale amount cannot be zero.")
+                    else:
+                        st.session_state.pending_sale = {
+                            "date": sale_date,
+                            "attendant": attendant,
+                            "cash": cash,
+                            "transfer": transfer,
+                            "total": total_prev
+                        }
+                        st.rerun()
+
+                if close_form:
+                    st.session_state.active_modal = None
+                    st.rerun()
+
+    # --- CONDITIONAL FORM 2: RECORD EXPENSE ---
+    if st.session_state.active_modal == "expense":
+        st.info("### 💸 Entry Form: Record Daily Expense")
+        if st.session_state.pending_expense is not None:
+            pe = st.session_state.pending_expense
+            st.warning("⚠️ **Please verify and confirm this expense before it is saved to Cloud:**")
+            st.markdown(f"""
+            - **Date:** {pe['date']}
+            - **Category:** **{pe['category']}**
+            - **Description:** {pe['description'] or 'N/A'}
+            - **TOTAL AMOUNT SPENT:** **₦{pe['amount']:,.2f}**
+            """)
+            c_conf, c_canc = st.columns(2)
+            if c_conf.button("✅ Confirm & Save to Cloud", use_container_width=True):
+                with st.spinner("Saving to Google Sheets..."):
+                    add_expense(pe['date'], pe['category'], pe['description'], pe['amount'])
+                st.success(f"✅ Confirmed! Expense of ₦{pe['amount']:,.2f} saved successfully.")
+                st.session_state.pending_expense = None
+                st.session_state.active_modal = None
+                st.rerun()
+
+            if c_canc.button("❌ Edit / Cancel", use_container_width=True):
+                st.session_state.pending_expense = None
+                st.rerun()
+        else:
+            with st.form("quick_exp_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    exp_date = st.date_input("Expense Date", value=date.today())
+                    category = st.selectbox("Expense Category", ["House Expenses", "Maintenance", "General Operations"])
+                with col2:
+                    amount = st.number_input("Amount (₦)", min_value=0.0, step=100.0, format="%.2f")
+                    description = st.text_input("Description / Reason", placeholder="e.g., Diesel purchase")
+
+                col_e1, col_e2 = st.columns([1, 1])
+                submit_exp = col_e1.form_submit_button("💾 Save to Cloud", use_container_width=True)
+                close_exp = col_e2.form_submit_button("✖️ Close Form", use_container_width=True)
+
+                if submit_exp:
+                    if amount <= 0:
+                        st.error("Amount must be greater than zero.")
+                    else:
+                        st.session_state.pending_expense = {
+                            "date": exp_date,
+                            "category": category,
+                            "description": description,
+                            "amount": amount
+                        }
+                        st.rerun()
+
+                if close_exp:
+                    st.session_state.active_modal = None
+                    st.rerun()
+
+    st.divider()
+
     # Tables
     col_l, col_r = st.columns(2)
     with col_l:
         st.subheader("Recent Sales Breakdown")
         if not sales_df.empty:
-            st.dataframe(sales_df[['id', 'date', 'attendant', 'cash', 'transfer', 'total']].tail(15), use_container_width=True)
+            st.dataframe(sales_df[['id', 'date', 'attendant', 'cash', 'transfer', 'total']].tail(15),
+                         use_container_width=True)
         else:
             st.info("No sales records yet.")
     with col_r:
         st.subheader("Recent Expenses Breakdown")
         if not expenses_df.empty:
-            st.dataframe(expenses_df[['id', 'date', 'category', 'description', 'amount']].tail(15), use_container_width=True)
+            st.dataframe(expenses_df[['id', 'date', 'category', 'description', 'amount']].tail(15),
+                         use_container_width=True)
         else:
             st.info("No expense records yet.")
 
 # ==========================================
-# PAGE 2: RECORD SALE (TWO-STEP VERIFICATION)
-# ==========================================
-elif menu == "💰 Record Sale":
-    st.header("💰 Record Daily Water Sale")
-
-    # If already verified & submitted
-    if st.session_state.pending_sale is not None:
-        ps = st.session_state.pending_sale
-        st.warning("⚠️ **Please verify and confirm this sale before it is saved to Cloud:**")
-        st.markdown(f"""
-        - **Date:** {ps['date']}
-        - **Attendant:** **{ps['attendant']}**
-        - **Cash Amount:** ₦{ps['cash']:,.2f}
-        - **Transfer Amount:** ₦{ps['transfer']:,.2f}
-        - **TOTAL REVENUE:** **₦{ps['total']:,.2f}**
-        """)
-        c_conf, c_canc = st.columns(2)
-        if c_conf.button("✅ Confirm & Save to Cloud", use_container_width=True):
-            with st.spinner("Saving to Google Sheets..."):
-                add_sale(ps['date'], ps['attendant'], ps['cash'], ps['transfer'])
-            st.success(f"✅ Confirmed! Sale of ₦{ps['total']:,.2f} saved successfully.")
-            st.session_state.pending_sale = None
-            st.rerun()
-
-        if c_canc.button("❌ Edit / Cancel", use_container_width=True):
-            st.session_state.pending_sale = None
-            st.rerun()
-    else:
-        with st.form("sales_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                sale_date = st.date_input("Date of Sale", value=date.today())
-                attendant = st.text_input("Attendant Name")
-            with col2:
-                cash = st.number_input("Cash Amount (₦)", min_value=0.0, step=100.0, format="%.2f")
-                transfer = st.number_input("Transfer Amount (₦)", min_value=0.0, step=100.0, format="%.2f")
-
-            total_prev = cash + transfer
-            st.info(f"**Total Sale Preview: ₦{total_prev:,.2f}**")
-
-            submit_sale = st.form_submit_button("💾 Save to Cloud")
-            if submit_sale:
-                if not attendant:
-                    st.error("Please enter the attendant's name.")
-                elif total_prev <= 0:
-                    st.error("Sale amount cannot be zero.")
-                else:
-                    # Put into verification state
-                    st.session_state.pending_sale = {
-                        "date": sale_date,
-                        "attendant": attendant,
-                        "cash": cash,
-                        "transfer": transfer,
-                        "total": total_prev
-                    }
-                    st.rerun()
-
-# ==========================================
-# PAGE 3: RECORD EXPENSE (TWO-STEP VERIFICATION)
-# ==========================================
-elif menu == "💸 Record Expense":
-    st.header("💸 Record Daily Expense")
-
-    if st.session_state.pending_expense is not None:
-        pe = st.session_state.pending_expense
-        st.warning("⚠️ **Please verify and confirm this expense before it is saved to Cloud:**")
-        st.markdown(f"""
-        - **Date:** {pe['date']}
-        - **Category:** **{pe['category']}**
-        - **Description:** {pe['description'] or 'N/A'}
-        - **TOTAL AMOUNT SPENT:** **₦{pe['amount']:,.2f}**
-        """)
-        c_conf, c_canc = st.columns(2)
-        if c_conf.button("✅ Confirm & Save to Cloud", use_container_width=True):
-            with st.spinner("Saving to Google Sheets..."):
-                add_expense(pe['date'], pe['category'], pe['description'], pe['amount'])
-            st.success(f"✅ Confirmed! Expense of ₦{pe['amount']:,.2f} saved successfully.")
-            st.session_state.pending_expense = None
-            st.rerun()
-
-        if c_canc.button("❌ Edit / Cancel", use_container_width=True):
-            st.session_state.pending_expense = None
-            st.rerun()
-    else:
-        with st.form("exp_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                exp_date = st.date_input("Expense Date", value=date.today())
-                category = st.selectbox("Expense Category", ["House Expenses", "Maintenance", "General Operations"])
-            with col2:
-                amount = st.number_input("Amount (₦)", min_value=0.0, step=100.0, format="%.2f")
-                description = st.text_input("Description / Reason", placeholder="e.g., Diesel purchase")
-
-            submit_exp = st.form_submit_button("💾 Save to Cloud")
-            if submit_exp:
-                if amount <= 0:
-                    st.error("Amount must be greater than zero.")
-                else:
-                    st.session_state.pending_expense = {
-                        "date": exp_date,
-                        "category": category,
-                        "description": description,
-                        "amount": amount
-                    }
-                    st.rerun()
-
-# ==========================================
-# PAGE 4: EDIT / CORRECT (PIN CLEARS UPON LOGIN)
+# PAGE 2: EDIT / CORRECT (PIN CLEARS UPON LOGIN)
 # ==========================================
 elif menu == "✏️ Edit / Correct Records":
     st.header("🔒 Admin Portal: Correct or Delete Wrong Entries")
 
-    # If not authenticated, prompt for PIN
     if not st.session_state.admin_authenticated:
         with st.form("admin_login_form"):
             entered_pin = st.text_input("Enter Admin PIN to Unlock:", type="password")
@@ -323,7 +361,6 @@ elif menu == "✏️ Edit / Correct Records":
                 else:
                     st.error("❌ Incorrect Admin PIN.")
     else:
-        # Authenticated: PIN is gone, Show Log Out / Lock Button
         top_c1, top_c2 = st.columns([3, 1])
         top_c1.success("🔓 Admin Session Active")
         if top_c2.button("🔒 Lock & Exit Admin"):
@@ -332,11 +369,9 @@ elif menu == "✏️ Edit / Correct Records":
 
         edit_tab1, edit_tab2 = st.tabs(["Correct Sales", "Correct Expenses"])
 
-        # Tab 1: Sales
         with edit_tab1:
             sales = get_sales()
             if not sales.empty:
-                # Descriptive Dropdown
                 sales_options = {
                     f"ID: {row['id']} | {row['date']} | {row['attendant']} | ₦{row['total']:,.2f}": row['id']
                     for _, row in sales.iterrows()
@@ -346,7 +381,9 @@ elif menu == "✏️ Edit / Correct Records":
                 record = sales[sales['id'] == selected_sale_id].iloc[0]
 
                 with st.form("edit_sale_form"):
-                    e_date = st.date_input("Date", value=datetime.strptime(str(record['date']), "%Y-%m-%d").date() if record['date'] else date.today())
+                    e_date = st.date_input("Date",
+                                           value=datetime.strptime(str(record['date']), "%Y-%m-%d").date() if record[
+                                               'date'] else date.today())
                     e_attendant = st.text_input("Attendant", value=str(record['attendant']))
                     e_cash = st.number_input("Cash (₦)", value=float(record['cash']), step=100.0)
                     e_transfer = st.number_input("Transfer (₦)", value=float(record['transfer']), step=100.0)
@@ -369,13 +406,12 @@ elif menu == "✏️ Edit / Correct Records":
             else:
                 st.info("No sales to display.")
 
-        # Tab 2: Expenses
         with edit_tab2:
             expenses = get_expenses()
             if not expenses.empty:
-                # Descriptive Dropdown
                 exp_options = {
-                    f"ID: {row['id']} | {row['date']} | {row['category']} | {row['description']} | ₦{row['amount']:,.2f}": row['id']
+                    f"ID: {row['id']} | {row['date']} | {row['category']} | {row['description']} | ₦{row['amount']:,.2f}":
+                        row['id']
                     for _, row in expenses.iterrows()
                 }
                 selected_exp_label = st.selectbox("Select Expense Record to Edit/Delete:", list(exp_options.keys()))
@@ -383,9 +419,13 @@ elif menu == "✏️ Edit / Correct Records":
                 record_exp = expenses[expenses['id'] == selected_exp_id].iloc[0]
 
                 with st.form("edit_exp_form"):
-                    ee_date = st.date_input("Date", value=datetime.strptime(str(record_exp['date']), "%Y-%m-%d").date() if record_exp['date'] else date.today())
-                    cat_index = ["House Expenses", "Maintenance", "General Operations"].index(record_exp['category']) if record_exp['category'] in ["House Expenses", "Maintenance", "General Operations"] else 0
-                    ee_cat = st.selectbox("Category", ["House Expenses", "Maintenance", "General Operations"], index=cat_index)
+                    ee_date = st.date_input("Date",
+                                            value=datetime.strptime(str(record_exp['date']), "%Y-%m-%d").date() if
+                                            record_exp['date'] else date.today())
+                    cat_index = ["House Expenses", "Maintenance", "General Operations"].index(record_exp['category']) if \
+                    record_exp['category'] in ["House Expenses", "Maintenance", "General Operations"] else 0
+                    ee_cat = st.selectbox("Category", ["House Expenses", "Maintenance", "General Operations"],
+                                          index=cat_index)
                     ee_desc = st.text_input("Description", value=str(record_exp['description']))
                     ee_amt = st.number_input("Amount (₦)", value=float(record_exp['amount']), step=100.0)
 
@@ -408,7 +448,7 @@ elif menu == "✏️ Edit / Correct Records":
                 st.info("No expenses to display.")
 
 # ==========================================
-# PAGE 5: COMPREHENSIVE REPORT & PRINT (WITH MONTH FILTER)
+# PAGE 3: COMPREHENSIVE REPORT & PRINT
 # ==========================================
 elif menu == "📑 Comprehensive Report & Print":
     st.header("📑 COR Mission House - Financial Statements")
@@ -417,7 +457,6 @@ elif menu == "📑 Comprehensive Report & Print":
     sales_df = get_sales()
     expenses_df = get_expenses()
 
-    # Create month grouping
     if not sales_df.empty:
         sales_df['month'] = pd.to_datetime(sales_df['date']).dt.strftime('%B %Y')
     else:
@@ -428,10 +467,10 @@ elif menu == "📑 Comprehensive Report & Print":
     else:
         expenses_df['month'] = []
 
-    all_months = sorted(list(set(sales_df['month'].dropna().tolist() + expenses_df['month'].dropna().tolist())), reverse=True)
+    all_months = sorted(list(set(sales_df['month'].dropna().tolist() + expenses_df['month'].dropna().tolist())),
+                        reverse=True)
     selected_month = st.selectbox("📅 Select Statement Month:", ["All Time"] + all_months)
 
-    # Filter data
     if selected_month != "All Time":
         rep_sales = sales_df[sales_df['month'] == selected_month]
         rep_expenses = expenses_df[expenses_df['month'] == selected_month]
@@ -439,7 +478,6 @@ elif menu == "📑 Comprehensive Report & Print":
         rep_sales = sales_df
         rep_expenses = expenses_df
 
-    # Calculations
     tot_cash = rep_sales['cash'].sum() if not rep_sales.empty else 0.0
     tot_trans = rep_sales['transfer'].sum() if not rep_sales.empty else 0.0
     tot_rev = rep_sales['total'].sum() if not rep_sales.empty else 0.0
@@ -468,7 +506,6 @@ elif menu == "📑 Comprehensive Report & Print":
 
     st.divider()
 
-    # Detailed breakdowns for this specific month
     c_s, c_e = st.columns(2)
     with c_s:
         st.write(f"**Sales Detail ({selected_month}):**")
@@ -477,7 +514,6 @@ elif menu == "📑 Comprehensive Report & Print":
         st.write(f"**Expenses Detail ({selected_month}):**")
         st.dataframe(rep_expenses[['date', 'category', 'description', 'amount']], use_container_width=True)
 
-    # Excel Download
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         summary_df.to_excel(writer, sheet_name='Summary Overview', index=False)
